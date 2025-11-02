@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Trading Dashboard - Options Greeks & Market Status</title>
+    <meta name="description" content="Real-time NSE trading signals with options Greeks analysis, market status monitoring, and trading calendar">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Custom styles for dark theme -->
+    <style>
+        body {
+            background-color: #111827;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+        }
+        
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+        
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .market-open {
+            color: #10b981;
+        }
+        
+        .market-closed {
+            color: #ef4444;
+        }
+        
+        .market-pre {
+            color: #f59e0b;
+        }
+        
+        .loading-spinner {
+            border: 3px solid #374151;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .signal-card {
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .options-table {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+        
+        .greek-positive {
+            color: #10b981;
+        }
+        
+        .greek-negative {
+            color: #ef4444;
+        }
+        
+        .greek-neutral {
+            color: #f59e0b;
+        }
+        
+        .signal-buy {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        }
+        
+        .signal-sell {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        }
+        
+        .signal-neutral {
+            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, #374151 0%, #4b5563 100%);
+            border-radius: 9999px;
+            height: 8px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            background: linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%);
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+        
+        .tab-active {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .tab-inactive {
+            color: #9ca3af;
+        }
+        
+        .tab-inactive:hover {
+            color: white;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .options-chain-table {
+            font-size: 0.875rem;
+        }
+        
+        .options-chain-table th,
+        .options-chain-table td {
+            padding: 8px 12px;
+            text-align: center;
+        }
+        
+        .strike-column {
+            background-color: #374151;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen">
+    <!-- Header -->
+    <header class="bg-gray-800 shadow-lg border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-white">Advanced Trading Dashboard</h1>
+                        <p class="text-gray-400 text-sm">Real-time NSE Options Greeks & Market Analysis</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <div id="market-status-indicator" class="flex items-center space-x-2">
+                        <div class="w-3 h-3 rounded-full bg-gray-500" id="market-dot"></div>
+                        <span class="text-sm text-gray-400" id="market-text">Loading...</span>
+                    </div>
+                    <div class="text-sm text-gray-400" id="current-time"></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <!-- Loading State -->
+        <div id="loading-screen" class="text-center py-20">
+            <div class="loading-spinner mx-auto mb-4"></div>
+            <h2 class="text-xl font-semibold text-white mb-2">Initializing Trading Dashboard</h2>
+            <p class="text-gray-400">Connecting to Angel One API and loading market data...</p>
+            <div class="mt-6 text-sm text-gray-500">
+                <p>✓ Loading market status and trading calendar</p>
+                <p>✓ Initializing options Greeks calculations</p>
+                <p>✓ Establishing real-time data connections</p>
+            </div>
+        </div>
+
+        <!-- Dashboard Content (Hidden initially) -->
+        <div id="dashboard-content" class="hidden">
+            <!-- Market Status Alert -->
+            <div id="market-alert" class="mb-6 p-4 rounded-lg border hidden">
+                <div class="flex items-center space-x-3">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                    <div>
+                        <h3 class="font-semibold" id="alert-title">Market Status</h3>
+                        <p class="text-sm" id="alert-message">Loading market information...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Market Status & Trading Calendar -->
+            <div id="market-info-section" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 hidden">
+                <!-- Market Status Card -->
+                <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <h3 class="text-lg font-semibold text-white">NSE Market Status</h3>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4" id="market-status-grid">
+                        <!-- Market status details will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Trading Calendar Card -->
+                <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                        <h3 class="text-lg font-semibold text-white">Trading Calendar</h3>
+                    </div>
+                    <div id="trading-calendar-content">
+                        <!-- Trading calendar will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-gray-800 rounded-lg p-6 card-hover border border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-400 text-sm">NIFTY 50</p>
+                            <p class="text-2xl font-bold text-white" id="nifty-price">--</p>
+                            <p class="text-sm" id="nifty-change">--</p>
+                        </div>
+                        <div class="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg p-6 card-hover border border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-400 text-sm">BANK NIFTY</p>
+                            <p class="text-2xl font-bold text-white" id="banknifty-price">--</p>
+                            <p class="text-sm" id="banknifty-change">--</p>
+                        </div>
+                        <div class="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg p-6 card-hover border border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-400 text-sm">FIN NIFTY</p>
+                            <p class="text-2xl font-bold text-white" id="finnifty-price">--</p>
+                            <p class="text-sm" id="finnifty-change">--</p>
+                        </div>
+                        <div class="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg p-6 card-hover border border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-400 text-sm">Active Signals</p>
+                            <p class="text-2xl font-bold text-white" id="active-signals">--</p>
+                            <p class="text-sm text-blue-400">Real-time Analysis</p>
+                        </div>
+                        <div class="w-12 h-12 bg-yellow-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <div class="bg-gray-800 rounded-lg p-1 mb-6 border border-gray-700">
+                <nav class="flex space-x-1">
+                    <button class="tab-button tab-active px-4 py-2 rounded-md text-sm font-medium transition-colors" data-tab="nifty">
+                        NIFTY 50
+                    </button>
+                    <button class="tab-button tab-inactive px-4 py-2 rounded-md text-sm font-medium transition-colors" data-tab="banknifty">
+                        BANK NIFTY
+                    </button>
+                    <button class="tab-button tab-inactive px-4 py-2 rounded-md text-sm font-medium transition-colors" data-tab="finnifty">
+                        FIN NIFTY
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Tab Content -->
+            <div id="tab-content">
+                <!-- Current Price Display -->
+                <div class="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-700">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold text-white" id="current-symbol">NIFTY - Live Price</h2>
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-1 rounded text-sm font-medium" id="price-change-badge">--</span>
+                            <span class="px-2 py-1 bg-blue-600 rounded text-sm font-medium text-white">
+                                <div class="flex items-center gap-1">
+                                    <div class="w-2 h-2 bg-white rounded-full pulse-dot"></div>
+                                    LIVE
+                                </div>
+                            </span>
+                            <span class="px-2 py-1 rounded text-sm font-medium hidden" id="market-closed-badge">MARKET CLOSED</span>
+                        </div>
+                    </div>
+                    <div class="text-3xl font-bold text-white mb-2" id="current-price">₹--</div>
+                    <div class="flex items-center justify-between text-sm">
+                        <div class="text-gray-400" id="last-update">Last updated: --</div>
+                        <div class="font-bold" id="confidence-display">Confidence: --%</div>
+                    </div>
+                </div>
+
+                <!-- Options Greeks Summary -->
+                <div id="options-greeks-section" class="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-700 hidden">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                            </svg>
+                            <h3 class="text-lg font-semibold text-white">Options Greeks Portfolio Summary</h3>
+                        </div>
+                        <button id="toggle-options-chain" class="text-blue-400 hover:text-blue-300 text-sm">
+                            Show Full Chain
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4" id="greeks-grid">
+                        <!-- Greeks will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Options Chain Table -->
+                <div id="options-chain-section" class="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-700 hidden">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        <h3 class="text-lg font-semibold text-white">Options Chain with Greeks</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full options-chain-table">
+                            <thead>
+                                <tr class="border-b border-gray-700">
+                                    <th class="text-gray-400">Call Delta</th>
+                                    <th class="text-gray-400">Call Gamma</th>
+                                    <th class="text-gray-400">Call Theta</th>
+                                    <th class="text-gray-400">Call Price</th>
+                                    <th class="text-white font-bold">Strike</th>
+                                    <th class="text-gray-400">Put Price</th>
+                                    <th class="text-gray-400">Put Theta</th>
+                                    <th class="text-gray-400">Put Gamma</th>
+                                    <th class="text-gray-400">Put Delta</th>
+                                </tr>
+                            </thead>
+                            <tbody id="options-chain-tbody">
+                                <!-- Options chain data will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Trading Signals -->
+                <div id="signals-section" class="mb-6 hidden">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        <h3 class="text-lg font-semibold text-white">High-Accuracy Trading Signals (<span id="signals-count">0</span> indicators)</h3>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="signals-grid">
+                        <!-- Signals will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Final Signal -->
+                <div id="final-signal-section" class="mb-6 hidden">
+                    <div class="rounded-lg p-6 border-none shadow-xl" id="final-signal-card">
+                        <div class="flex items-center gap-2 mb-6">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <h3 class="text-xl font-bold text-white">Final Trading Signal - <span id="final-action">--</span></h3>
+                            <span class="px-2 py-1 bg-white text-black text-sm font-medium rounded hidden" id="high-confidence-badge">HIGH CONFIDENCE</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" id="final-signal-metrics">
+                            <!-- Final signal metrics will be populated here -->
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" id="final-signal-targets">
+                            <!-- Final signal targets will be populated here -->
+                        </div>
+                        <div class="bg-black bg-opacity-20 p-4 rounded" id="final-signal-reasoning">
+                            <!-- Final signal reasoning will be populated here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading State for Tab Content -->
+                <div id="tab-loading" class="text-center py-12">
+                    <div class="loading-spinner mx-auto mb-4"></div>
+                    <p class="text-gray-400">Loading trading data and options Greeks...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="error-screen" class="hidden text-center py-20">
+            <div class="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+            </div>
+            <h2 class="text-xl font-semibold text-white mb-2">Connection Error</h2>
+            <p class="text-gray-400 mb-6">Unable to connect to the trading backend</p>
+            <div class="bg-gray-800 rounded-lg p-4 text-left max-w-md mx-auto">
+                <h3 class="font-semibold text-white mb-2">Setup Instructions:</h3>
+                <ol class="text-sm text-gray-300 space-y-1">
+                    <li>1. Configure Angel One API credentials in backend.py</li>
+                    <li>2. Install dependencies: <code class="bg-gray-700 px-1 rounded">pip install -r requirements.txt</code></li>
+                    <li>3. Run backend: <code class="bg-gray-700 px-1 rounded">python backend.py</code></li>
+                    <li>4. Refresh this page</li>
+                </ol>
+            </div>
+            <button onclick="location.reload()" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors">
+                Retry Connection
+            </button>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 border-t border-gray-700 mt-12">
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <div class="flex items-center justify-between">
+                <div class="text-sm text-gray-400">
+                    <p>Advanced Trading Dashboard with Options Greeks Analysis</p>
+                    <p>Real-time NSE data • Market Status Monitoring • Trading Calendar</p>
+                </div>
+                <div class="flex items-center space-x-4 text-sm text-gray-400">
+                    <span id="connection-status">Connecting...</span>
+                    <div class="w-2 h-2 rounded-full bg-gray-500" id="connection-dot"></div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // Global state
+        let currentTab = 'nifty';
+        let websockets = {};
+        let marketStatus = null;
+        let tradingCalendar = null;
+        let lastUpdate = {};
+        let currentData = {};
+        let showOptionsChain = false;
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeDashboard();
+            updateCurrentTime();
+            setInterval(updateCurrentTime, 1000);
+        });
+
+        function initializeDashboard() {
+            // Check backend health
+            fetch('/health')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'healthy') {
+                        showDashboard();
+                        initializeWebSockets();
+                        if (data.market_status) {
+                            updateMarketStatus(data.market_status);
+                        }
+                    } else {
+                        showError();
+                    }
+                })
+                .catch(error => {
+                    console.error('Health check failed:', error);
+                    showError();
+                });
+        }
+
+        function showDashboard() {
+            document.getElementById('loading-screen').classList.add('hidden');
+            document.getElementById('dashboard-content').classList.remove('hidden');
+            
+            // Setup tab navigation
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', function() {
+                    switchTab(this.dataset.tab);
+                });
+            });
+
+            // Setup options chain toggle
+            document.getElementById('toggle-options-chain').addEventListener('click', function() {
+                toggleOptionsChain();
+            });
+        }
+
+        function showError() {
+            document.getElementById('loading-screen').classList.add('hidden');
+            document.getElementById('error-screen').classList.remove('hidden');
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // Update active tab
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('tab-active');
+                btn.classList.add('tab-inactive');
+            });
+            
+            document.querySelector(`[data-tab="${tab}"]`).classList.add('tab-active');
+            document.querySelector(`[data-tab="${tab}"]`).classList.remove('tab-inactive');
+            
+            // Don't close other websockets - keep them running for quick stats
+            // Just ensure current tab has a connection
+            if (!websockets[tab]) {
+                connectWebSocket(tab);
+            }
+
+            // Update current symbol display
+            document.getElementById('current-symbol').textContent = `${tab.toUpperCase()} - Live Price`;
+            
+            // Show loading state
+            showTabLoading();
+        }
+
+        function showTabLoading() {
+            document.getElementById('tab-loading').classList.remove('hidden');
+            document.getElementById('options-greeks-section').classList.add('hidden');
+            document.getElementById('options-chain-section').classList.add('hidden');
+            document.getElementById('signals-section').classList.add('hidden');
+            document.getElementById('final-signal-section').classList.add('hidden');
+        }
+
+        function hideTabLoading() {
+            document.getElementById('tab-loading').classList.add('hidden');
+        }
+
+        function toggleOptionsChain() {
+            showOptionsChain = !showOptionsChain;
+            const chainSection = document.getElementById('options-chain-section');
+            const toggleButton = document.getElementById('toggle-options-chain');
+            
+            if (showOptionsChain) {
+                chainSection.classList.remove('hidden');
+                toggleButton.textContent = 'Hide Full Chain';
+            } else {
+                chainSection.classList.add('hidden');
+                toggleButton.textContent = 'Show Full Chain';
+            }
+        }
+
+        function initializeWebSockets() {
+            // Connect to all indices for quick stats
+            ['nifty', 'banknifty', 'finnifty'].forEach(index => {
+                connectWebSocket(index);
+            });
+        }
+
+        function connectWebSocket(index) {
+            const ws = new WebSocket(`ws://localhost:8000/ws/${index.toUpperCase()}`);
+            websockets[index] = ws;
+
+            ws.onopen = function() {
+                console.log(`Connected to ${index} WebSocket`);
+                updateConnectionStatus('connected');
+            };
+
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.error) {
+                        console.error(`WebSocket error for ${index}:`, data.error);
+                        updateConnectionStatus('error');
+                    } else {
+                        updateDashboardData(index, data);
+                        updateConnectionStatus('connected');
+                        lastUpdate[index] = new Date().toLocaleTimeString();
+                    }
+                } catch (error) {
+                    console.error('Error parsing WebSocket data:', error);
+                }
+            };
+
+            ws.onerror = function(error) {
+                console.error(`WebSocket error for ${index}:`, error);
+                updateConnectionStatus('error');
+            };
+
+            ws.onclose = function() {
+                console.log(`WebSocket closed for ${index}`);
+                updateConnectionStatus('disconnected');
+                delete websockets[index];
+                
+                // Auto-reconnect after 5 seconds
+                setTimeout(() => {
+                    if (!websockets[index]) {
+                        connectWebSocket(index);
+                    }
+                }, 5000);
+            };
+        }
+
+        function updateDashboardData(index, data) {
+            currentData[index] = data;
+
+            // Update quick stats
+            if (data.current) {
+                const priceElement = document.getElementById(`${index.toLowerCase()}-price`);
+                const changeElement = document.getElementById(`${index.toLowerCase()}-change`);
+                
+                if (priceElement) {
+                    priceElement.textContent = `₹${data.current.toFixed(2)}`;
+                }
+                
+                if (changeElement && data.percent !== undefined) {
+                    const changeClass = data.percent >= 0 ? 'text-green-400' : 'text-red-400';
+                    const changeSymbol = data.percent >= 0 ? '+' : '';
+                    changeElement.textContent = `${changeSymbol}${data.percent.toFixed(2)}%`;
+                    changeElement.className = `text-sm ${changeClass}`;
+                }
+            }
+
+            // Update market status
+            if (data.market_status) {
+                updateMarketStatus(data.market_status);
+            }
+
+            // Update trading calendar
+            if (data.trading_calendar) {
+                updateTradingCalendar(data.trading_calendar);
+            }
+
+            // Update active signals count
+            if (data.signals) {
+                const activeSignalsElement = document.getElementById('active-signals');
+                if (activeSignalsElement) {
+                    const highConfidenceSignals = data.signals.filter(s => s.strength >= 70).length;
+                    activeSignalsElement.textContent = highConfidenceSignals.toString();
+                }
+            }
+
+            // Update tab content if this is the current tab
+            if (index === currentTab) {
+                updateTabContent(data);
+            }
+        }
+
+        function updateMarketStatus(status) {
+            marketStatus = status;
+            
+            // Update header indicator
+            const marketDot = document.getElementById('market-dot');
+            const marketText = document.getElementById('market-text');
+            
+            if (marketDot && marketText) {
+                if (status.is_open) {
+                    marketDot.className = 'w-3 h-3 rounded-full bg-green-500 pulse-dot';
+                    marketText.textContent = 'Market Open';
+                    marketText.className = 'text-sm market-open';
+                } else {
+                    marketDot.className = 'w-3 h-3 rounded-full bg-red-500';
+                    marketText.textContent = 'Market Closed';
+                    marketText.className = 'text-sm market-closed';
+                }
+            }
+
+            // Update market alert
+            const marketAlert = document.getElementById('market-alert');
+            const alertTitle = document.getElementById('alert-title');
+            const alertMessage = document.getElementById('alert-message');
+            
+            if (marketAlert && alertTitle && alertMessage) {
+                if (!status.is_open) {
+                    marketAlert.className = 'mb-6 p-4 rounded-lg border border-red-500 bg-red-900/20 text-red-100';
+                    alertTitle.textContent = 'Market Closed';
+                    alertMessage.textContent = status.message;
+                    marketAlert.classList.remove('hidden');
+                    document.getElementById('market-closed-badge').classList.remove('hidden');
+                } else {
+                    marketAlert.className = 'mb-6 p-4 rounded-lg border border-green-500 bg-green-900/20 text-green-100';
+                    alertTitle.textContent = 'Market Open';
+                    alertMessage.textContent = status.message;
+                    marketAlert.classList.remove('hidden');
+                    document.getElementById('market-closed-badge').classList.add('hidden');
+                }
+            }
+
+            // Update market status grid
+            const statusGrid = document.getElementById('market-status-grid');
+            if (statusGrid) {
+                statusGrid.innerHTML = `
+                    <div class="bg-gray-700 p-3 rounded">
+                        <div class="text-gray-400 text-sm">Status</div>
+                        <div class="${status.is_open ? 'market-open' : 'market-closed'} text-lg font-bold">
+                            ${status.status}
+                        </div>
+                    </div>
+                    <div class="bg-gray-700 p-3 rounded">
+                        <div class="text-gray-400 text-sm">Current Time</div>
+                        <div class="text-white font-medium">${status.current_time}</div>
+                    </div>
+                    <div class="bg-gray-700 p-3 rounded">
+                        <div class="text-gray-400 text-sm">Message</div>
+                        <div class="text-white text-sm">${status.message}</div>
+                    </div>
+                    <div class="bg-gray-700 p-3 rounded">
+                        <div class="text-gray-400 text-sm">${status.is_open ? 'Closes' : 'Next Open'}</div>
+                        <div class="text-white text-sm">
+                            ${status.is_open ? status.next_close || 'Today at 3:30 PM' : status.next_open || 'Unknown'}
+                        </div>
+                    </div>
+                `;
+                document.getElementById('market-info-section').classList.remove('hidden');
+            }
+        }
+
+        function updateTradingCalendar(calendar) {
+            tradingCalendar = calendar;
+            const calendarContent = document.getElementById('trading-calendar-content');
+            
+            if (calendarContent) {
+                let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-6">';
+                
+                // Next trading days
+                html += '<div><h4 class="text-white font-semibold mb-3">Next Trading Days</h4><div class="space-y-2">';
+                calendar.next_trading_days.slice(0, 5).forEach(day => {
+                    html += `
+                        <div class="flex justify-between items-center bg-gray-700 p-2 rounded">
+                            <span class="text-white">${day.day}</span>
+                            <span class="text-gray-400">${day.formatted}</span>
+                        </div>
+                    `;
+                });
+                html += '</div></div>';
+                
+                // Upcoming holidays
+                html += '<div><h4 class="text-white font-semibold mb-3">Upcoming Holidays</h4><div class="space-y-2">';
+                calendar.upcoming_holidays.forEach(holiday => {
+                    html += `
+                        <div class="flex justify-between items-center bg-red-900/30 p-2 rounded">
+                            <span class="text-red-400">${holiday.day}</span>
+                            <span class="text-red-300">${holiday.formatted}</span>
+                        </div>
+                    `;
+                });
+                html += '</div></div>';
+                
+                html += '</div>';
+                calendarContent.innerHTML = html;
+            }
+        }
+
+        function updateTabContent(data) {
+            hideTabLoading();
+
+            // Update current price
+            if (data.current) {
+                document.getElementById('current-price').textContent = `₹${data.current.toFixed(2)}`;
+                
+                if (data.percent !== undefined) {
+                    const badge = document.getElementById('price-change-badge');
+                    const changeSymbol = data.percent >= 0 ? '+' : '';
+                    badge.textContent = `${changeSymbol}${data.percent.toFixed(2)}%`;
+                    badge.className = `px-2 py-1 rounded text-sm font-medium ${data.percent >= 0 ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`;
+                }
+            }
+
+            // Update last update time
+            if (lastUpdate[currentTab]) {
+                document.getElementById('last-update').textContent = `Last updated: ${lastUpdate[currentTab]}`;
+            }
+
+            // Update confidence
+            if (data.final_signal && data.final_signal.confidence !== undefined) {
+                const confidenceElement = document.getElementById('confidence-display');
+                const confidence = data.final_signal.confidence;
+                const colorClass = confidence >= 80 ? 'text-green-400' : confidence >= 60 ? 'text-yellow-400' : 'text-red-400';
+                confidenceElement.textContent = `Confidence: ${confidence.toFixed(0)}%`;
+                confidenceElement.className = `font-bold ${colorClass}`;
+            }
+
+            // Update options Greeks
+            if (data.portfolio_greeks) {
+                updateOptionsGreeks(data.portfolio_greeks);
+            }
+
+            // Update options chain
+            if (data.options_chain) {
+                updateOptionsChain(data.options_chain);
+            }
+
+            // Update signals
+            if (data.signals) {
+                updateSignals(data.signals);
+            }
+
+            // Update final signal
+            if (data.final_signal) {
+                updateFinalSignal(data.final_signal);
+            }
+        }
+
+        function updateOptionsGreeks(greeks) {
+            const greeksGrid = document.getElementById('greeks-grid');
+            const greeksSection = document.getElementById('options-greeks-section');
+            
+            if (greeksGrid) {
+                greeksGrid.innerHTML = `
+                    <div class="bg-gray-700 p-3 rounded">
+                        <div class="text-gray-400 text-sm">Net Delta</div>
+                        <div class="text-xl font-bold ${greeks.net_delta > 0 ? 'greek-positive' : 'greek-negative'}">
+                            ${greeks.net_delta.toFixed(0)}
+                        </div>
+                    </div>
+                    <div class="bg-gray-700 p-3 rounded">
+                        <div class="text-gray-400 text-sm">Total Gamma</div>
+                        <div class="text-xl font-bold greek-neutral">
+                            ${greeks.total_gamma.toFixed(1)}
+                        </div>
+                    </div>
+                    <div class="bg-gray-700 p-3 rounded">
+                        <div class="text-gray-400 text-sm">Total Theta</div>
+                        <div class="text-xl font-bold ${greeks.total_theta < -10 ? 'greek-negative' : 'greek-neutral'}">
+                            ${greeks.total_theta.toFixed(1)}
+                        </div>
+                    </div>
+                    <div class="bg-gray-700 p-3 rounded">
+                        <div class="text-gray-400 text-sm">Total Vega</div>
+                        <div class="text-xl font-bold greek-neutral">
+                            ${greeks.total_vega.toFixed(1)}
+                        </div>
+                    </div>
+                    <div class="bg-gray-700 p-3 rounded">
+                        <div class="text-gray-400 text-sm">Put-Call Ratio</div>
+                        <div class="text-xl font-bold text-white">
+                            ${greeks.put_call_ratio.toFixed(2)}
+                        </div>
+                    </div>
+                    <div class="bg-gray-700 p-3 rounded">
+                        <div class="text-gray-400 text-sm">Max Pain</div>
+                        <div class="text-xl font-bold text-yellow-400">
+                            ₹${greeks.max_pain.toFixed(0)}
+                        </div>
+                    </div>
+                    <div class="bg-gray-700 p-3 rounded">
+                        <div class="text-gray-400 text-sm">Call Volume</div>
+                        <div class="text-lg font-bold greek-positive">
+                            ${greeks.total_call_volume.toFixed(0)}
+                        </div>
+                    </div>
+                    <div class="bg-gray-700 p-3 rounded">
+                        <div class="text-gray-400 text-sm">Put Volume</div>
+                        <div class="text-lg font-bold greek-negative">
+                            ${greeks.total_put_volume.toFixed(0)}
+                        </div>
+                    </div>
+                `;
+                greeksSection.classList.remove('hidden');
+            }
+        }
+
+        function updateOptionsChain(optionsChain) {
+            const tbody = document.getElementById('options-chain-tbody');
+            
+            if (tbody && optionsChain.length > 0) {
+                tbody.innerHTML = '';
+                optionsChain.slice(0, 15).forEach(option => {
+                    const row = document.createElement('tr');
+                    row.className = 'border-b border-gray-700 hover:bg-gray-700';
+                    row.innerHTML = `
+                        <td class="greek-positive">${option.call.delta.toFixed(3)}</td>
+                        <td class="greek-neutral">${option.call.gamma.toFixed(3)}</td>
+                        <td class="greek-negative">${option.call.theta.toFixed(2)}</td>
+                        <td class="text-white font-medium">₹${option.call.price.toFixed(1)}</td>
+                        <td class="strike-column">${option.strike}</td>
+                        <td class="text-white font-medium">₹${option.put.price.toFixed(1)}</td>
+                        <td class="greek-negative">${option.put.theta.toFixed(2)}</td>
+                        <td class="greek-neutral">${option.put.gamma.toFixed(3)}</td>
+                        <td class="greek-negative">${option.put.delta.toFixed(3)}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+        }
+
+        function updateSignals(signals) {
+            const signalsGrid = document.getElementById('signals-grid');
+            const signalsSection = document.getElementById('signals-section');
+            const signalsCount = document.getElementById('signals-count');
+            
+            if (signalsGrid && signals.length > 0) {
+                signalsCount.textContent = signals.length;
+                signalsGrid.innerHTML = '';
+                
+                signals.forEach(signal => {
+                    const signalCard = document.createElement('div');
+                    const signalClass = signal.signal === 'BUY' ? 'signal-buy' : 
+                                       signal.signal === 'SELL' ? 'signal-sell' : 'signal-neutral';
+                    
+                    signalCard.className = `${signalClass} rounded-lg p-4 card-hover`;
+                    signalCard.innerHTML = `
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                </svg>
+                                <span class="text-sm font-medium text-white">${signal.name}</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${signal.signal === 'BUY' ? 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6' : signal.signal === 'SELL' ? 'M13 17h8m0 0V9m0 8l-8-8-4 4-6-6' : 'M20 12H4'}"></path>
+                                </svg>
+                                ${signal.strength >= 80 ? '<div class="w-2 h-2 bg-white rounded-full pulse-dot"></div>' : ''}
+                            </div>
+                        </div>
+                        <div class="text-xl font-bold text-white mb-2">${signal.value}</div>
+                        <div class="progress-bar mb-2">
+                            <div class="progress-fill" style="width: ${signal.strength}%"></div>
+                        </div>
+                        <div class="text-xs text-white opacity-90 mb-1">${signal.description}</div>
+                        <div class="flex items-center justify-between text-xs text-white">
+                            <span>Strength: ${signal.strength.toFixed(0)}%</span>
+                            ${signal.strength >= 85 ? '<span class="bg-white text-black px-1 py-0 rounded text-xs">HIGH</span>' : ''}
+                        </div>
+                    `;
+                    signalsGrid.appendChild(signalCard);
+                });
+                
+                signalsSection.classList.remove('hidden');
+            }
+        }
+
+        function updateFinalSignal(finalSignal) {
+            const finalSignalSection = document.getElementById('final-signal-section');
+            const finalSignalCard = document.getElementById('final-signal-card');
+            const finalAction = document.getElementById('final-action');
+            const highConfidenceBadge = document.getElementById('high-confidence-badge');
+            const metricsGrid = document.getElementById('final-signal-metrics');
+            const targetsGrid = document.getElementById('final-signal-targets');
+            const reasoningDiv = document.getElementById('final-signal-reasoning');
+            
+            if (finalSignal) {
+                // Update card color
+                const cardClass = finalSignal.action === 'BUY' ? 'signal-buy' : 
+                                 finalSignal.action === 'SELL' ? 'signal-sell' : 'signal-neutral';
+                finalSignalCard.className = `${cardClass} rounded-lg p-6 border-none shadow-xl`;
+                
+                // Update action
+                finalAction.textContent = finalSignal.action;
+                
+                // Update high confidence badge
+                if (finalSignal.confidence >= 80) {
+                    highConfidenceBadge.classList.remove('hidden');
+                } else {
+                    highConfidenceBadge.classList.add('hidden');
+                }
+                
+                // Update metrics
+                const confidenceColor = finalSignal.confidence >= 80 ? 'text-green-400' : 
+                                       finalSignal.confidence >= 60 ? 'text-yellow-400' : 'text-red-400';
+                
+                metricsGrid.innerHTML = `
+                    <div class="bg-black bg-opacity-20 p-3 rounded">
+                        <div class="text-sm opacity-80">Confidence</div>
+                        <div class="text-2xl font-bold ${confidenceColor}">
+                            ${finalSignal.confidence.toFixed(0)}%
+                        </div>
+                    </div>
+                    <div class="bg-black bg-opacity-20 p-3 rounded">
+                        <div class="text-sm opacity-80">Entry Price</div>
+                        <div class="text-xl font-bold">₹${finalSignal.entry.toFixed(2)}</div>
+                    </div>
+                    <div class="bg-black bg-opacity-20 p-3 rounded">
+                        <div class="text-sm opacity-80 flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                            </svg>
+                            Stop Loss
+                        </div>
+                        <div class="text-xl font-bold">₹${finalSignal.stopLoss.toFixed(2)}</div>
+                    </div>
+                    <div class="bg-black bg-opacity-20 p-3 rounded">
+                        <div class="text-sm opacity-80 flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Target 1
+                        </div>
+                        <div class="text-xl font-bold">₹${finalSignal.target1.toFixed(2)}</div>
+                    </div>
+                `;
+                
+                // Update targets
+                targetsGrid.innerHTML = `
+                    <div class="bg-black bg-opacity-20 p-3 rounded">
+                        <div class="text-sm opacity-80">Target 2</div>
+                        <div class="text-lg font-bold">₹${finalSignal.target2.toFixed(2)}</div>
+                    </div>
+                    <div class="bg-black bg-opacity-20 p-3 rounded">
+                        <div class="text-sm opacity-80">Risk:Reward</div>
+                        <div class="text-lg font-bold">1:${finalSignal.riskReward.toFixed(1)}</div>
+                    </div>
+                    <div class="bg-black bg-opacity-20 p-3 rounded">
+                        <div class="text-sm opacity-80">Position Size</div>
+                        <div class="text-lg font-bold">${finalSignal.positionSize}</div>
+                    </div>
+                `;
+                
+                // Update reasoning
+                let reasoningHtml = '<div class="text-sm opacity-80 mb-3 font-semibold">Signal Analysis:</div><ul class="text-sm space-y-2">';
+                finalSignal.reasoning.forEach(reason => {
+                    reasoningHtml += `
+                        <li class="flex items-start gap-2">
+                            <div class="w-1.5 h-1.5 bg-white rounded-full mt-2 flex-shrink-0"></div>
+                            <span>${reason}</span>
+                        </li>
+                    `;
+                });
+                reasoningHtml += '</ul>';
+                reasoningDiv.innerHTML = reasoningHtml;
+                
+                finalSignalSection.classList.remove('hidden');
+            }
+        }
+
+        function updateConnectionStatus(status) {
+            const statusElement = document.getElementById('connection-status');
+            const dotElement = document.getElementById('connection-dot');
+            
+            if (statusElement && dotElement) {
+                switch (status) {
+                    case 'connected':
+                        statusElement.textContent = 'Connected';
+                        statusElement.className = 'text-green-400';
+                        dotElement.className = 'w-2 h-2 rounded-full bg-green-500 pulse-dot';
+                        break;
+                    case 'error':
+                        statusElement.textContent = 'Error';
+                        statusElement.className = 'text-red-400';
+                        dotElement.className = 'w-2 h-2 rounded-full bg-red-500';
+                        break;
+                    default:
+                        statusElement.textContent = 'Disconnected';
+                        statusElement.className = 'text-gray-400';
+                        dotElement.className = 'w-2 h-2 rounded-full bg-gray-500';
+                }
+            }
+        }
+
+        function updateCurrentTime() {
+            const timeElement = document.getElementById('current-time');
+            if (timeElement) {
+                const now = new Date();
+                timeElement.textContent = now.toLocaleTimeString('en-IN', {
+                    timeZone: 'Asia/Kolkata',
+                    hour12: true
+                });
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            Object.values(websockets).forEach(ws => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.close();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
