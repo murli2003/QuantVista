@@ -4,8 +4,9 @@ A python based trading suggestion or analysis webapp dashboard that fetches api 
 
 A high-performance, low-latency trading dashboard for NSE indices (NIFTY, BANKNIFTY, FINNIFTY), providing real-time technical signals, options greeks, and open interest (OI) analysis via the Angel One Smart API.
 
-![Dashboard Demo](httpsDASHBOARD_IMAGE_LINK_HERE)
-*(Suggestion: Upload a screenshot of your dashboard and replace the link above)*
+
+<img width="1920" height="1080" alt="Screenshot (97)" src="https://github.com/user-attachments/assets/192e156c-695f-447a-bece-3b3ee77ac696" />
+
 
 ---
 
