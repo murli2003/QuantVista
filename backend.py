@@ -62,21 +62,6 @@ STRIKE_INTERVALS = {
 # NSE Risk-free rate (current RBI repo rate approximately)
 RISK_FREE_RATE = 0.065  # 6.5% as of 2024
 
-# NSE Holidays 2024 (Add more as needed)
-NSE_HOLIDAYS_2024 = [
-    "2024-01-26",  # Republic Day
-    "2024-03-08",  # Holi
-    "2024-03-29",  # Good Friday
-    "2024-04-11",  # Eid ul Fitr
-    "2024-04-17",  # Ram Navami
-    "2024-05-01",  # Maharashtra Day
-    "2024-06-17",  # Eid ul Adha
-    "2024-08-15",  # Independence Day
-    "2024-10-02",  # Gandhi Jayanti
-    "2024-11-01",  # Diwali Laxmi Puja
-    "2024-11-15",  # Guru Nanak Jayanti
-    "2024-12-25",  # Christmas
-]
 
 # Active WebSocket connections
 active_connections = {}
@@ -165,12 +150,7 @@ def is_trading_day():
     if now.weekday() >= 5:
         return False, "Weekend - Markets Closed"
     
-    # Check if it's a holiday
-    today_str = now.strftime("%Y-%m-%d")
-    if today_str in NSE_HOLIDAYS_2024:
-        return False, "NSE Holiday - Markets Closed"
-    
-    return True, "Trading Day"
+
 
 def get_market_status():
     """Get current market status"""
@@ -1543,3 +1523,4 @@ async def websocket_endpoint(websocket: WebSocket, index: str):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
